@@ -1,4 +1,3 @@
-
 import { User } from "../modals/user.modal.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import jwt from "jsonwebtoken"
@@ -6,21 +5,21 @@ import bcrypt from "bcrypt"
 import apiError from "../utils/apiError.js";
 import ApiResponse from "../utils/apiResponse.js";
 
-const generateAccessAndRefreshToken=asyncHandler(async (user_id)=>{
-
+const generateAccessAndRefreshToken = async (user_id) => {
     try {
-        const user=await User.findById(user_id)
-        const accessToken=await user.generateAccessToken()
-        const refreshToken=await user.generateRefreshToken()
-        user.save({validateBeforeSave: false})
-        return {accessToken,refreshToken}
-        
-        
+        const user = await User.findById(user_id);
+        const accessToken = user.generateAccessToken(); 
+        const refreshToken = user.generateRefreshToken();
+
+        user.refreshToken = refreshToken;
+        await user.save({ validateBeforeSave: false });
+        return { accessToken, refreshToken };
     } catch (error) {
-        throw new apiError(500,"Something went wrong while genareting access and refrsh token",error)
-        
+        console.error("Token generation error:", error);
+        throw new apiError(500, "Something went wrong while generating access and refresh token");
     }
-})
+}
+
 
 const registerUser=asyncHandler(async (req,res)=>{
     //get data from front end
@@ -57,5 +56,52 @@ const registerUser=asyncHandler(async (req,res)=>{
       return res.status(200).json(new ApiResponse(200,createdUser,"User created Succssfully"))
 } )
 
+const loginUser = asyncHandler(async (req, res) => {
+    console.log("Login request hit");
 
-export {registerUser}
+    const { email, password } = req.body;
+
+    if ([email, password].some((field) => field?.trim() === "")) {
+        throw new apiError(400, "All fields are required");
+    }
+
+    const user = await User.findOne({ email });
+
+    if (!user) {
+        throw new apiError(400, "User does not exist");
+    }
+
+    if (!(await user.isPasswordCorrect(password))) {  // ✅ Added await
+        throw new apiError(400, "Invalid credentials");
+    }
+    const { accessToken, refreshToken } = await generateAccessAndRefreshToken(user._id);
+    console.log("testing");
+    if (!accessToken || !refreshToken) {
+        throw new apiError(500, "Access Token and Refresh Token Error");
+    }
+
+    const loggedInUser = await User.findById(user._id).select("-password -refreshToken");
+    const options = {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "Strict", // ✅ Added sameSite option
+    };
+
+    // ✅ Log to debug
+    
+
+    return res
+        .status(200)
+        .cookie("accessToken", accessToken, options)
+        .cookie("refreshToken", refreshToken, options)
+        .json(
+            new ApiResponse(
+                200,
+                { user: loggedInUser, accessToken, refreshToken },
+                "User logged in successfully"
+            )
+        );
+});
+
+
+export {registerUser,loginUser}
