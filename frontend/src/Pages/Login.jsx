@@ -1,8 +1,11 @@
-import React,{useState} from 'react'
-import { Link } from 'react-router-dom'
+import React,{useContext, useEffect, useState} from 'react'
+import { Link,useNavigate,Navigate } from 'react-router-dom'
+import { loginContext } from './component/contextapi'
 const Login = () => {
+  const navigate=useNavigate()
     const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const {loggedIn,setLoggedIn}=useContext(loginContext)
 
   const handleSubmit = async (e) => {
     try {
@@ -22,7 +25,8 @@ const Login = () => {
       const data = await response.json()
       if(data.success)
       {
-        alert(`${data?.user?.username} Logged in Successfully`)
+        setLoggedIn(true)
+        navigate("/book")
         console.log(data)
       }
       
